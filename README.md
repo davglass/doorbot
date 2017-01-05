@@ -3,13 +3,15 @@ Ring.com Doorbell API
 
 I built this because of this [tweet](https://twitter.com/ring/status/816752533137977344).
 
+I have nothing to do with Ring.com, they just annoyed me with that tweet, so I figured out their api..
+
 usage
 -----
 
 `npm i doorbot --save`
 
 ```js
-const ring = require('./doorbot.js');
+const ring = require('doorbot');
 
 const email = 'your@email.com';
 const password = '12345';
