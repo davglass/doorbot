@@ -1,6 +1,5 @@
-Ring.com Doorbell API
+Ring.com Doorbell API [![Build Status](https://travis-ci.org/davglass/doorbot.svg?branch=master)](https://travis-ci.org/davglass/doorbot)
 =====================
-
 I built this because of this [tweet](https://twitter.com/ring/status/816752533137977344).
 
 I have nothing to do with Ring.com, they just annoyed me with that tweet, so I figured out their api..
