@@ -1,5 +1,5 @@
 
-const ring = require('../doorbot.js');
+const RingAPI = require('../doorbot.js');
 const assert = require('assert');
 const nock = require('nock');
 
@@ -10,9 +10,9 @@ describe('doorbot tests', () => {
     });
 
     it('should export stuff', () => {
-        assert.ok(ring);
+        assert.ok(RingAPI);
     });
-
+    
     it('authenticate', (done) => {
         nock('https://api.ring.com').post('/clients_api/session')
             .reply(200, {
@@ -20,29 +20,54 @@ describe('doorbot tests', () => {
                     authentication_token: 'TOKEN'
                 }
             });
-        ring.authenticate('test', 'test', (e, token) => {
+        const ring = RingAPI({
+            email: 'test',
+            password: 'test'
+        });
+        ring.authenticate((e, token) => {
             assert.equal(token, 'TOKEN');
             done();
         });
     });
 
+    it('authenticate throw no username', () => {
+        assert.throws(() => {
+            RingAPI();
+        }, /username is required/);
+    });
+    
+    it('authenticate throw no password', () => {
+        assert.throws(() => {
+            RingAPI({ username: 'foo' });
+        }, /password is required/);
+    });
+    
     it('authenticate failed', (done) => {
         nock('https://api.ring.com').post('/clients_api/session')
             .reply(500, '');
-        ring.authenticate('', '', (e, token) => {
+        const ring = RingAPI({
+            username: 'asdf',
+            password: 'asdf'
+        });
+        ring.authenticate((e, token) => {
             assert.equal(token, '');
-            assert.equal(e.message, 'API returned Status Code 500');
+            assert.equal(e.message, 'Api failed to return an authentication_token');
             done();
         });
     });
-
+    
     it('get devices', (done) => {
         nock('https://api.ring.com').get('/clients_api/ring_devices')
             .query({ auth_token: 'TOKEN', api_version: 9 })
             .reply(200, [
                 { device: 1, d: '2017-01-05T19:05:40.000Z' }
             ]);
-        ring.devices('TOKEN', (e, json) => {
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        ring.devices((e, json) => {
             assert.ok(json);
             assert.ok(Array.isArray(json));
             assert.equal(json[0].device, 1);
@@ -57,7 +82,12 @@ describe('doorbot tests', () => {
             .reply(200, {
                 error: 'something happened'
             });
-        ring.devices('TOKEN', (e) => {
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        ring.devices((e) => {
             assert.equal(e.error, 'something happened');
             done();
         });
@@ -70,7 +100,12 @@ describe('doorbot tests', () => {
             .reply(200, [
                 { device: 1, d: '2017-01-05T19:05:40.000Z' }
             ]);
-        ring.history('TOKEN', (e, json) => {
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        ring.history((e, json) => {
             assert.ok(json);
             assert.ok(Array.isArray(json));
             assert.equal(json[0].device, 1);
@@ -85,7 +120,12 @@ describe('doorbot tests', () => {
             .reply(200, [
                 { device: 1, d: '2017-01-05T19:05:40.000Z' }
             ]);
-        ring.dings('TOKEN', (e, json) => {
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        ring.dings((e, json) => {
             assert.ok(json);
             assert.ok(Array.isArray(json));
             assert.equal(json[0].device, 1);
@@ -101,10 +141,40 @@ describe('doorbot tests', () => {
             .reply(200, '', {
                 location: URL
             });
-        ring.recording('TOKEN', 1, (e, url) => {
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        ring.recording(1, (e, url) => {
             assert.equal(url, URL);
             done();
         });
+    });
+
+    it('Retry on error..', function(done) {
+        this.timeout(50000);
+        nock('https://api.ring.com').persist().post('/clients_api/session')
+            .reply(200, {
+                profile: {
+                    authentication_token: 'TOKEN'
+                }
+            });
+        nock('https://api.ring.com').persist().get('/clients_api/ring_devices')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(401, {
+                error: 'Denied!!'
+            });
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        ring.devices((e) => {
+            assert.equal(e.message, 'API returned Status Code 401');
+            done();
+        });
+    
     });
 
 });

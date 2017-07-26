@@ -3,6 +3,8 @@ const parse = require('url').parse;
 const format = require('url').format;
 const stringify = require('querystring').stringify;
 
+const logger = require('debug')('doorbot');
+
 const API_VERSION = 9;
 
 const formatDates = (key, value) => {
@@ -12,109 +14,161 @@ const formatDates = (key, value) => {
     return value;
 };
 
-const fetch = (method, url, data, callback) => {
-    var d = parse('https://api.ring.com/clients_api' + url, true);
-    delete d.path;
-    delete d.href;
-    if (method === 'GET') {
-        Object.keys(data).forEach((key) => {
-            d.query[key] = data[key];
+const scrub = (data) => {
+    data = data.replace(/"id":(\d+),"created_at"/g, '"id":"$1","created_at"');
+    return data;
+};
+
+class Doorbot {
+    constructor(options) {
+        options = options || {};
+        this.username = options.username || options.email;
+        this.password = options.password;
+        this.retries = options.retries || 15;
+        this.counter = 0;
+        this.userAgent = options.userAgent || '@nodejs-doorbot';
+        this.token = null;
+
+        if (!this.username) {
+            throw(new Error('username is required'));
+        }
+        if (!this.password) {
+            throw(new Error('password is required'));
+        }
+    }
+
+    fetch(method, url, data, callback) {
+        logger('fetch:', this.counter, method, url);
+        var d = parse('https://api.ring.com/clients_api' + url, true);
+        delete d.path;
+        delete d.href;
+        if (method === 'GET') {
+            Object.keys(data).forEach((key) => {
+                d.query[key] = data[key];
+            });
+        }
+        d = parse(format(d), true);
+        logger('fetch-data', d);
+        d.method = method;
+        d.headers = d.headers || {};
+        if (this.username && this.password && !this.token) {
+            d.headers['Authorization'] = 'Basic ' + new Buffer(this.username + ':' + this.password).toString('base64');
+        }
+        if (method !== 'GET') {
+            data = stringify(data);
+            d.headers['content-type'] = 'application/x-www-form-urlencoded';
+            d.headers['content-length'] = data.length;
+        }
+        d.headers['user-agent'] = this.userAgent;
+        logger('fetch-headers', d.headers);
+        const req = https.request(d, (res) => {
+            var data = '';
+            res.on('data', (d) => {
+                data += d;
+            });
+            /*istanbul ignore next*/
+            res.on('error', (e) => {
+                callback(e);
+            });
+            res.on('end', () => {
+                logger('fetch-raw-data', data);
+                var json,
+                    e = null;
+                try {
+                    data = scrub(data);
+                    json = JSON.parse(data, formatDates);
+                } catch (e) {
+                    json = data;
+                }
+                logger('fetch-json', json);
+                if (json.error) {
+                    e = json;
+                    e.status = Number(e.status);
+                    json = {};
+                }
+                if (res.statusCode >= 400) {
+                    e = new Error(`API returned Status Code ${res.statusCode}`);
+                    e.code = res.statusCode;
+                }
+                callback(e, json, res);
+            });
+        });
+        req.on('error', callback);
+        if (method === 'POST') {
+            logger('fetch-post', data);
+            req.write(data);
+        }
+        req.end();
+    }
+
+    simpleGet(url, callback) {
+        this.authenticate(() => {
+            this.fetch('GET', url, {
+                api_version: API_VERSION,
+                auth_token: this.token
+            }, (e, res, json) => {
+                if (e && e.code === 401 && this.counter < this.retries) {
+                    logger('auth failed, retrying');
+                    this.counter += 1;
+                    setTimeout(() => {
+                        this.token = null;
+                        this.authenticate((e) => {
+                            /*istanbul ignore next*/
+                            if (e) {
+                                return callback(e);
+                            }
+                            this.simpleGet(url, callback);
+                        });
+                    }, 500);
+                    return;
+                }
+                this.counter = 0;
+                callback(e, res, json);
+            });
         });
     }
-    d = parse(format(d), true);
-    d.method = method;
-    d.headers = d.headers || {};
-    if (data.username && data.password) {
-        d.headers['Authorization'] = 'Basic ' + new Buffer(data.username + ':' + data.password).toString('base64');
-        delete data.username;
-        delete data.password;
-    }
-    if (method !== 'GET') {
-        data = stringify(data);
-        d.headers['content-type'] = 'application/x-www-form-urlencoded';
-        d.headers['content-length'] = data.length;
-    }
-    d.headers['user-agent'] = '@nodejs-doorbot';
-    const req = https.request(d, (res) => {
-        var data = '';
-        res.on('data', (d) => {
-            data += d;
-        });
-        /*istanbul ignore next*/
-        res.on('error', (e) => {
-            callback(e);
-        });
-        res.on('end', () => {
-            var json,
-                e = null;
-            try {
-                json = JSON.parse(data, formatDates);
-            } catch (e) {
-                json = data;
+
+    authenticate(callback) {
+        if (this.token) {
+            logger('auth skipped, we have a token');
+            return callback();
+        }
+        logger('authenticating..');
+        this.fetch('POST', '/session', {
+            username: this.username,
+            password: this.password,
+            'device[os]': 'ios',
+            'device[hardware_id]': 'https://twitter.com/ring/status/816752533137977344', //Because I can..
+            api_version: API_VERSION
+        }, (e, json) => {
+            this.token = json && json.profile && json.profile.authentication_token;
+            logger('authentication_token', this.token);
+            if (!this.token) {
+                e = new Error('Api failed to return an authentication_token');
             }
-            if (json.error) {
-                e = json;
-                e.status = Number(e.status);
-                json = {};
-            }
-            if (!e && res.statusCode >= 400) {
-                e = new Error(`API returned Status Code ${res.statusCode}`);
-            }
-            callback(e, json, res);
+            callback(e, this.token);
         });
-    });
-    req.on('error', callback);
-    if (method === 'POST') {
-        req.write(data);
     }
-    req.end();
+
+    devices(callback) {
+        this.simpleGet('/ring_devices', callback);
+    }
+
+    history(callback) {
+        this.simpleGet('/doorbots/history', callback);
+    }
+
+    dings(callback) {
+        this.simpleGet('/dings/active', callback);
+    }
+
+    recording(id, callback) {
+        this.simpleGet(`/dings/${id}/recording`, (e, json, res) => {
+            callback(e, res && res.headers && res.headers.location, res);
+        });
+    }
+}
+
+module.exports = function(options) {
+    return new Doorbot(options);
 };
-
-exports.fetch = fetch;
-
-const simpleGet = (token, url, callback) => {
-    fetch('GET', url, {
-        api_version: API_VERSION,
-        auth_token: token
-    }, callback);
-};
-
-const devices = (token, callback) => {
-    simpleGet(token, '/ring_devices', callback);
-};
-
-exports.devices = devices;
-
-const history = (token, callback) => {
-    simpleGet(token, '/doorbots/history', callback);
-};
-
-exports.history = history;
-
-const dings = (token, callback) => {
-    simpleGet(token, '/dings/active', callback);
-};
-
-exports.dings = dings;
-
-const recording = (token, id, callback) => {
-    simpleGet(token, `/dings/${id}/recording`, (e, json, res) => {
-        callback(e, res && res.headers && res.headers.location, res);
-    });
-};
-
-exports.recording = recording;
-
-const authenticate = (username, password, callback) => {
-    fetch('POST', '/session', {
-        username: username,
-        password: password,
-        'device[os]': 'ios',
-        'device[hardware_id]': 'https://twitter.com/ring/status/816752533137977344', //Because I can..
-        api_version: API_VERSION
-    }, (e, json) => {
-        callback(e, json && json.profile && json.profile.authentication_token);
-    });
-};
-
-exports.authenticate = authenticate;
