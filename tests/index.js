@@ -152,8 +152,56 @@ describe('doorbot tests', () => {
         });
     });
 
+    it('turn on floodlight', (done) => {
+        nock('https://api.ring.com').put('/clients_api/doorbots/12345/floodlight_light_on')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(200);
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        const device = { id: '12345' };
+        ring.lightOn(device, (e) => {
+            assert.equal(e, null);
+            done();
+        });
+    });
+
+    it('turn off floodlight', (done) => {
+        nock('https://api.ring.com').put('/clients_api/doorbots/12345/floodlight_light_off')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(200);
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        const device = { id: '12345' };
+        ring.lightOff(device, (e) => {
+            assert.equal(e, null);
+            done();
+        });
+    });
+
+    it('toggle floodlight', (done) => {
+        nock('https://api.ring.com').put('/clients_api/doorbots/12345/floodlight_light_on')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(200);
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        const device = { id: '12345', led_status: 'off' };
+        ring.lightToggle(device, (e) => {
+            assert.equal(e, null);
+            done();
+        });
+    });
+
     it('Retry on error..', function(done) {
-        this.timeout(50000);
+        this.timeout(100000);
         nock('https://api.ring.com').persist().post('/clients_api/session')
             .reply(200, {
                 profile: {

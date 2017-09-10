@@ -2,10 +2,12 @@ const https = require('https');
 const parse = require('url').parse;
 const format = require('url').format;
 const stringify = require('querystring').stringify;
+const crypto = require("crypto");
 
 const logger = require('debug')('doorbot');
 
 const API_VERSION = 9;
+const hardware_id = crypto.randomBytes(16).toString("hex");
 
 const formatDates = (key, value) => {
     if (value && value.indexOf && value.indexOf('.000Z') > -1) {
@@ -37,16 +39,18 @@ class Doorbot {
         }
     }
 
-    fetch(method, url, data, callback) {
+    fetch(method, url, query, body, callback) {
         logger('fetch:', this.counter, method, url);
         var d = parse('https://api.ring.com/clients_api' + url, true);
         delete d.path;
         delete d.href;
-        if (method === 'GET') {
-            Object.keys(data).forEach((key) => {
-                d.query[key] = data[key];
+
+        if (query) {
+            Object.keys(query).forEach((key) => {
+                d.query[key] = query[key];
             });
         }
+    
         d = parse(format(d), true);
         logger('fetch-data', d);
         d.method = method;
@@ -54,10 +58,10 @@ class Doorbot {
         if (this.username && this.password && !this.token) {
             d.headers['Authorization'] = 'Basic ' + new Buffer(this.username + ':' + this.password).toString('base64');
         }
-        if (method !== 'GET') {
-            data = stringify(data);
+        if (body) {
+            body = stringify(body);
             d.headers['content-type'] = 'application/x-www-form-urlencoded';
-            d.headers['content-length'] = data.length;
+            d.headers['content-length'] = body.length;
         }
         d.headers['user-agent'] = this.userAgent;
         logger('fetch-headers', d.headers);
@@ -95,18 +99,18 @@ class Doorbot {
         });
         req.on('error', callback);
         if (method === 'POST') {
-            logger('fetch-post', data);
-            req.write(data);
+            logger('fetch-post', body);
+            req.write(body);
         }
         req.end();
     }
 
-    simpleGet(url, callback) {
+    simpleRequest(url, method, callback) {
         this.authenticate(() => {
-            this.fetch('GET', url, {
+            this.fetch(method, url, {
                 api_version: API_VERSION,
                 auth_token: this.token
-            }, (e, res, json) => {
+            }, null, (e, res, json) => {
                 if (e && e.code === 401 && this.counter < this.retries) {
                     logger('auth failed, retrying');
                     this.counter += 1;
@@ -117,7 +121,7 @@ class Doorbot {
                             if (e) {
                                 return callback(e);
                             }
-                            this.simpleGet(url, callback);
+                            this.simpleRequest(url, method, callback);
                         });
                     }, 500);
                     return;
@@ -134,11 +138,12 @@ class Doorbot {
             return callback();
         }
         logger('authenticating..');
-        this.fetch('POST', '/session', {
+        
+        this.fetch('POST', '/session', null, {
             username: this.username,
             password: this.password,
             'device[os]': 'ios',
-            'device[hardware_id]': 'https://twitter.com/ring/status/816752533137977344', //Because I can..
+            'device[hardware_id]': hardware_id,
             api_version: API_VERSION
         }, (e, json) => {
             this.token = json && json.profile && json.profile.authentication_token;
@@ -151,19 +156,37 @@ class Doorbot {
     }
 
     devices(callback) {
-        this.simpleGet('/ring_devices', callback);
+        this.simpleRequest('/ring_devices', 'GET', callback);
     }
 
     history(callback) {
-        this.simpleGet('/doorbots/history', callback);
+        this.simpleRequest('/doorbots/history', 'GET', callback);
     }
 
     dings(callback) {
-        this.simpleGet('/dings/active', callback);
+        this.simpleRequest('/dings/active', 'GET', callback);
+    }
+
+    lightOn(device, callback) {
+        var url = `/doorbots/${device.id}/floodlight_light_on`;
+        this.simpleRequest(url, 'PUT', callback);
+    }
+
+    lightOff(device, callback) {
+        var url = `/doorbots/${device.id}/floodlight_light_off`;
+        this.simpleRequest(url, 'PUT', callback);
+    }
+
+    lightToggle(device, callback) {
+        var url = `/doorbots/${device.id}/floodlight_light_off`;
+        if (device.hasOwnProperty('led_status') && device.led_status === 'off') {
+            url = `/doorbots/${device.id}/floodlight_light_on`;
+        }
+        this.simpleRequest(url, 'PUT', callback);
     }
 
     recording(id, callback) {
-        this.simpleGet(`/dings/${id}/recording`, (e, json, res) => {
+        this.simpleRequest(`/dings/${id}/recording`, 'GET', (e, json, res) => {
             callback(e, res && res.headers && res.headers.location, res);
         });
     }

@@ -17,7 +17,7 @@ const RingAPI = require('doorbot');
 const ring = RingAPI({
     email: 'your@email.com'
     password: '12345',
-    reties: 20, //optional, defaults to 15
+    retries: 20, //optional, defaults to 15
     userAgent: 'My User Agent' //optional, defaults to @nodejs-doorbot
 });
 
@@ -37,6 +37,16 @@ ring.devices((e, devices) => {
             check();
         });
     });
+
+    //floodlights are under the stickups_cams prop
+    if (devices.hasOwnProperty('stickup_cams') && 
+        Array.isArray(devices.stickup_cams) &&
+        devices.stickup_cams.length > 0) {
+        
+        ring.lightToggle(devices.stickup_cams[0], (e) => {
+            //Light state has been toggled
+        });
+    }
 });
 ```
 
@@ -54,6 +64,19 @@ Get your ring history:
 Get a URL to a recording:
 
 `ring.recording(token, id, callback) => (error, url)`
+
+Turn on floodlights
+
+`ring.lightOn(device, callback) => (error)`
+
+Turn off floodlights
+
+`ring.lightOff(device, callback) => (error)`
+
+Toggle floodlights
+
+`ring.lightToggle(device, callback) => (error)`
+
 
 debugging
 ---------
