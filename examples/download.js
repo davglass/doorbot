@@ -14,7 +14,7 @@ const url = require('url');
 const request = require('request');
 
 const ring = RingAPI({
-    email: 'your@email.com'
+    email: 'your@email.com',
     password: '12345'
 });
 
