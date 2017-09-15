@@ -15,9 +15,9 @@ usage
 const RingAPI = require('doorbot');
 
 const ring = RingAPI({
-    email: 'your@email.com'
+    email: 'your@email.com',
     password: '12345',
-    retries: 20, //optional, defaults to 15
+    retries: 10, //authentication retries, optional, defaults to 0
     userAgent: 'My User Agent' //optional, defaults to @nodejs-doorbot
 });
 
