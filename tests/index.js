@@ -184,7 +184,7 @@ describe('doorbot tests', () => {
         });
     });
 
-    it('toggle floodlight', (done) => {
+    it('toggle floodlight off -> on', (done) => {
         nock('https://api.ring.com').put('/clients_api/doorbots/12345/floodlight_light_on')
             .query({ auth_token: 'TOKEN', api_version: 9 })
             .reply(200);
@@ -194,6 +194,22 @@ describe('doorbot tests', () => {
         });
         ring.token = 'TOKEN';
         const device = { id: '12345', led_status: 'off' };
+        ring.lightToggle(device, (e) => {
+            assert.equal(e, null);
+            done();
+        });
+    });
+
+    it('toggle floodlight on -> off', (done) => {
+        nock('https://api.ring.com').put('/clients_api/doorbots/12345/floodlight_light_off')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(200);
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        const device = { id: '12345', led_status: 'on' };
         ring.lightToggle(device, (e) => {
             assert.equal(e, null);
             done();
@@ -215,7 +231,8 @@ describe('doorbot tests', () => {
             });
         const ring = RingAPI({
             username: 'test',
-            password: 'test'
+            password: 'test',
+            retries: 2
         });
         ring.token = 'TOKEN';
         ring.devices((e) => {

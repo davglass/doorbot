@@ -16,6 +16,10 @@ const formatDates = (key, value) => {
     return value;
 };
 
+/*
+ * This converts the ID to a string, they are using large numbers for their ID's
+ * and that breaks in JS since it can't math too well..
+ */
 const scrub = (data) => {
     data = data.replace(/"id":(\d+),"created_at"/g, '"id":"$1","created_at"');
     return data;
@@ -26,7 +30,7 @@ class Doorbot {
         options = options || {};
         this.username = options.username || options.email;
         this.password = options.password;
-        this.retries = options.retries || 15;
+        this.retries = options.retries || 0;
         this.counter = 0;
         this.userAgent = options.userAgent || '@nodejs-doorbot';
         this.token = null;
@@ -151,7 +155,11 @@ class Doorbot {
             if (!this.token) {
                 e = new Error('Api failed to return an authentication_token');
             }
-            callback(e, this.token);
+            //Timeout after authentication to let the token take effect
+            //performance issue..
+            setTimeout(() => {
+                callback(e, this.token);
+            }, 1500);
         });
     }
 
