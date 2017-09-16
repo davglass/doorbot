@@ -41,6 +41,8 @@ class Doorbot {
         if (!this.password) {
             throw(new Error('password is required'));
         }
+        this.authenticating = false;
+        this.authQueue = [];
     }
 
     fetch(method, url, query, body, callback) {
@@ -141,6 +143,12 @@ class Doorbot {
             logger('auth skipped, we have a token');
             return callback();
         }
+        if (this.authenticating) {
+            logger('authenticate in progress, queuing callback');
+            this.authQueue.push(callback);
+            return;
+        }
+        this.authenticating = true;
         logger('authenticating..');
         
         this.fetch('POST', '/session', null, {
@@ -150,15 +158,21 @@ class Doorbot {
             'device[hardware_id]': hardware_id,
             api_version: API_VERSION
         }, (e, json) => {
-            this.token = json && json.profile && json.profile.authentication_token;
-            logger('authentication_token', this.token);
-            if (!this.token) {
+            const token = json && json.profile && json.profile.authentication_token;
+            logger('authentication_token', token);
+            if (!token) {
                 e = new Error('Api failed to return an authentication_token');
             }
             //Timeout after authentication to let the token take effect
             //performance issue..
             setTimeout(() => {
-                callback(e, this.token);
+                this.token = token;
+                this.authenticating = false;
+                if (this.authQueue.length) {
+                    logger(`Clearing ${this.authQueue.length} callbacks from the queue`);
+                    this.authQueue.forEach(_cb => {return _cb(e, token);});
+                }
+                callback(e, token);
             }, 1500);
         });
     }

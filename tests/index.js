@@ -29,6 +29,27 @@ describe('doorbot tests', () => {
             done();
         });
     });
+    
+    it('should use auth queue for parallel calls', function(done) {
+        nock('https://api.ring.com').persist().post('/clients_api/session')
+            .reply(200, {
+                profile: {
+                    authentication_token: 'TOKEN'
+                }
+            });
+        const ring = RingAPI({
+            email: 'test',
+            password: 'test'
+        });
+        ring.authenticate(() => {});
+        assert.ok(ring.authenticating);
+        ring.authenticate(() => {});
+        assert.equal(ring.authQueue.length, 1);
+        ring.authenticate(() => {});
+        assert.equal(ring.authQueue.length, 2);
+        done();
+    });
+
 
     it('authenticate throw no username', () => {
         assert.throws(() => {
