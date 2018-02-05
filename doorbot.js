@@ -48,8 +48,10 @@ class Doorbot {
     fetch(method, url, query, body, callback) {
         logger('fetch:', this.counter, method, url);
         var d = parse('https://api.ring.com/clients_api' + url, true);
+        logger('query', query);
         delete d.path;
         delete d.href;
+        delete d.search;
 
         if (query) {
             Object.keys(query).forEach((key) => {
@@ -181,8 +183,13 @@ class Doorbot {
         this.simpleRequest('/ring_devices', 'GET', callback);
     }
 
-    history(callback) {
-        this.simpleRequest('/doorbots/history', 'GET', callback);
+    history(limit, callback) {
+        if (typeof limit === 'function') {
+            callback = limit;
+            limit = 20;
+        }
+        const url = `/doorbots/history?limit=${limit}`;
+        this.simpleRequest(url, 'GET', callback);
     }
 
     dings(callback) {

@@ -117,7 +117,7 @@ describe('doorbot tests', () => {
 
     it('get history', (done) => {
         nock('https://api.ring.com').get('/clients_api/doorbots/history')
-            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .query({ auth_token: 'TOKEN', api_version: 9, limit: 20 })
             .reply(200, [
                 { device: 1, d: '2017-01-05T19:05:40.000Z' }
             ]);
@@ -127,6 +127,26 @@ describe('doorbot tests', () => {
         });
         ring.token = 'TOKEN';
         ring.history((e, json) => {
+            assert.ok(json);
+            assert.ok(Array.isArray(json));
+            assert.equal(json[0].device, 1);
+            assert.ok(json[0].d instanceof Date && isFinite(json[0].d));
+            done();
+        });
+    });
+
+    it('get history with limit', (done) => {
+        nock('https://api.ring.com').get('/clients_api/doorbots/history')
+            .query({ auth_token: 'TOKEN', api_version: 9, limit: 40 })
+            .reply(200, [
+                { device: 1, d: '2017-01-05T19:05:40.000Z' }
+            ]);
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        ring.history(40, (e, json) => {
             assert.ok(json);
             assert.ok(Array.isArray(json));
             assert.equal(json[0].device, 1);

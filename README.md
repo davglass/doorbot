@@ -55,15 +55,16 @@ api
 
 Get a list of your devices:
 
-`ring.devices(token, callback) => (error, array)`
+`ring.devices(callback) => (error, array)`
 
 Get your ring history:
 
-`ring.history(token, callback) => (error, array)`
+`ring.history(callback) => (error, array)`
+`ring.history(limit, callback) => (error, array)` - `limit` - The `Number` of items to return from the history.
 
 Get a URL to a recording:
 
-`ring.recording(token, id, callback) => (error, url)`
+`ring.recording(id, callback) => (error, url)`
 
 Turn on floodlights
 
