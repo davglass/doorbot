@@ -282,5 +282,125 @@ describe('doorbot tests', () => {
         });
     
     });
+    
+    it('set chime do not disturb', (done) => {
+        nock('https://api.ring.com').post('/clients_api/chimes/12345/do_not_disturb')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(200);
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        const device = { id: '12345' };
+        ring.set_chime_dnd(device, 180, (e) => {
+            assert.equal(e, null);
+            done();
+        });
+    });
 
+    it('set chime do not disturb to off', (done) => {
+        nock('https://api.ring.com').post('/clients_api/chimes/12345/do_not_disturb')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(200);
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        const device = { id: '12345' };
+        ring.set_chime_dnd(device, 0, (e) => {
+            assert.equal(e, null);
+            done();
+        });
+    });
+
+    it('get chime do not disturb', (done) => {
+        nock('https://api.ring.com').get('/clients_api/chimes/12345/do_not_disturb')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(200);
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        const device = { id: '12345' };
+        ring.get_chime_dnd(device, (e) => {
+            assert.equal(e, null);
+            done();
+        });
+    });
+
+    it('set doorbot do not disturb', (done) => {
+        nock('https://api.ring.com').post('/clients_api/doorbots/12345/motion_snooze')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(200);
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        const device = { id: '12345' };
+        ring.set_doorbot_dnd(device, 180, (e) => {
+            assert.equal(e, null);
+            done();
+        });
+    });
+    
+    it('set doorbot do not disturb to off', (done) => {
+        nock('https://api.ring.com').post('/clients_api/doorbots/12345/motion_snooze/clear')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(200);
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        const device = { id: '12345' };
+        ring.set_doorbot_dnd(device, 0, (e) => {
+            assert.equal(e, null);
+            done();
+        });
+    });
+    
+    it('should error on no device object', () => {
+        assert.throws(() => {
+            const ring = RingAPI({
+                username: 'test',
+                password: 'test'
+            });
+            ring.set_doorbot_dnd(null);
+        }, /Device needs to be an object/);
+    });
+
+    it('should error on bad device', () => {
+        assert.throws(() => {
+            const ring = RingAPI({
+                username: 'test',
+                password: 'test'
+            });
+            ring.set_doorbot_dnd({});
+        }, /Device.id not found/);
+    });
+
+    it('should error on no callback', () => {
+        assert.throws(() => {
+            const ring = RingAPI({
+                username: 'test',
+                password: 'test'
+            });
+            ring.set_doorbot_dnd({ id: 1234 });
+        }, /Callback not defined/);
+    });
+
+    it('should error on no number argument', () => {
+        assert.throws(() => {
+            const ring = RingAPI({
+                username: 'test',
+                password: 'test'
+            });
+            /*istanbul ignore next*/
+            ring.set_doorbot_dnd({ id: 1234 }, null, () => {});
+        }, /Number argument required/);
+    });
 });

@@ -78,6 +78,25 @@ Toggle floodlights
 
 `ring.lightToggle(device, callback) => (error)`
 
+Set Chime Do Not Disturb
+
+`ring.set_chime_dnd(device, minutes, callback) => (error, json)`
+
+* on: `ring.set_chime_dnd(device, 15, callback) => (error, json)`
+* off: `ring.set_chime_dnd(device, 0, callback) => (error, json)`
+
+Get Chime Do Not Disturb
+
+`ring.get_chime_dnd(device, callback) => (error, json)`
+
+Set Doorbot Do Not Disturb (motion snooze)
+
+`ring.set_doorbot_dnd(device, minutes, callback) => (error, json)`
+
+* on: `ring.set_doorbot_dnd(device, 60, callback) => (error, json)`
+* off: `ring.set_doorbot_dnd(device, 0, callback) => (error, json)`
+
+*The Get API call for the doorbot DND returned a 404, not sure how to get the current time*
 
 debugging
 ---------

@@ -25,6 +25,27 @@ const scrub = (data) => {
     return data;
 };
 
+const validate_number = (num) => {
+    if (typeof num !== 'number') {
+        throw new Error('Number argument required');
+    }
+};
+
+const validate_device = (device) => {
+    if (typeof device !== 'object' || !device) {
+        throw new Error('Device needs to be an object');
+    }
+    if (device && !device.id) {
+        throw new Error('Device.id not found');
+    }
+};
+
+const validate_callback = (callback) => {
+    if (typeof callback !== 'function') {
+        throw new Error('Callback not defined');
+    }
+};
+
 class Doorbot {
     constructor(options) {
         options = options || {};
@@ -113,12 +134,20 @@ class Doorbot {
         req.end();
     }
 
-    simpleRequest(url, method, callback) {
+    simpleRequest(url, method, data, callback) {
+        if (typeof data === 'function') {
+            callback = data;
+            data = null;
+        }
+        /*istanbul ignore next*/
+        if (data && !data.api_version) {
+            data.api_version = API_VERSION;
+        }
         this.authenticate(() => {
             this.fetch(method, url, {
                 api_version: API_VERSION,
                 auth_token: this.token
-            }, null, (e, res, json) => {
+            }, data, (e, res, json) => {
                 if (e && e.code === 401 && this.counter < this.retries) {
                     logger('auth failed, retrying');
                     this.counter += 1;
@@ -180,6 +209,7 @@ class Doorbot {
     }
 
     devices(callback) {
+        validate_callback(callback);
         this.simpleRequest('/ring_devices', 'GET', callback);
     }
 
@@ -188,25 +218,34 @@ class Doorbot {
             callback = limit;
             limit = 20;
         }
+        validate_number(limit);
+        validate_callback(callback);
         const url = `/doorbots/history?limit=${limit}`;
         this.simpleRequest(url, 'GET', callback);
     }
 
     dings(callback) {
+        validate_callback(callback);
         this.simpleRequest('/dings/active', 'GET', callback);
     }
 
     lightOn(device, callback) {
+        validate_device(device);
+        validate_callback(callback);
         var url = `/doorbots/${device.id}/floodlight_light_on`;
         this.simpleRequest(url, 'PUT', callback);
     }
 
     lightOff(device, callback) {
+        validate_device(device);
+        validate_callback(callback);
         var url = `/doorbots/${device.id}/floodlight_light_off`;
         this.simpleRequest(url, 'PUT', callback);
     }
 
     lightToggle(device, callback) {
+        validate_device(device);
+        validate_callback(callback);
         var url = `/doorbots/${device.id}/floodlight_light_off`;
         if (device.hasOwnProperty('led_status') && device.led_status === 'off') {
             url = `/doorbots/${device.id}/floodlight_light_on`;
@@ -215,10 +254,43 @@ class Doorbot {
     }
 
     recording(id, callback) {
+        validate_callback(callback);
+        validate_number(id);
         this.simpleRequest(`/dings/${id}/recording`, 'GET', (e, json, res) => {
             callback(e, res && res.headers && res.headers.location, res);
         });
     }
+
+    set_chime_dnd(device, time, callback) {
+        validate_device(device);
+        validate_callback(callback);
+        validate_number(time);
+        var url = `/chimes/${device.id}/do_not_disturb`;
+        this.simpleRequest(url, 'POST', {
+            time: time
+        }, callback);
+    }
+
+    get_chime_dnd(device, callback) {
+        validate_device(device);
+        validate_callback(callback);
+        var url = `/chimes/${device.id}/do_not_disturb`;
+        this.simpleRequest(url, 'GET', callback);
+    }
+
+    set_doorbot_dnd(device, time, callback) {
+        validate_device(device);
+        validate_callback(callback);
+        validate_number(time);
+        var url = `/doorbots/${device.id}/motion_snooze`;
+        if (!time) {
+            url = `/doorbots/${device.id}/motion_snooze/clear`;
+        }
+        this.simpleRequest(url, 'POST', {
+            time: time
+        }, callback);
+    }
+
 }
 
 module.exports = function(options) {
