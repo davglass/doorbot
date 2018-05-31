@@ -73,7 +73,8 @@ class Doorbot {
         delete d.path;
         delete d.href;
         delete d.search;
-
+        
+        /*istanbul ignore next*/
         if (query) {
             Object.keys(query).forEach((key) => {
                 d.query[key] = query[key];
@@ -84,9 +85,6 @@ class Doorbot {
         logger('fetch-data', d);
         d.method = method;
         d.headers = d.headers || {};
-        if (this.username && this.password && !this.token) {
-            d.headers['Authorization'] = 'Basic ' + new Buffer(this.username + ':' + this.password).toString('base64');
-        }
         if (body) {
             body = stringify(body);
             d.headers['content-type'] = 'application/x-www-form-urlencoded';
@@ -143,13 +141,19 @@ class Doorbot {
         if (data && !data.api_version) {
             data.api_version = API_VERSION;
         }
-        this.authenticate(() => {
+        this.authenticate((e) => {
+            if (e && !this.retries) {
+                return callback(e);
+            }
             this.fetch(method, url, {
                 api_version: API_VERSION,
                 auth_token: this.token
             }, data, (e, res, json) => {
+                logger('code', json.statusCode);
+                logger('headers', json.headers);
+                logger(e);
                 if (e && e.code === 401 && this.counter < this.retries) {
-                    logger('auth failed, retrying');
+                    logger('auth failed, retrying', e);
                     this.counter += 1;
                     setTimeout(() => {
                         this.token = null;
@@ -180,32 +184,104 @@ class Doorbot {
             return;
         }
         this.authenticating = true;
-        logger('authenticating..');
-        
-        this.fetch('POST', '/session', null, {
+        logger('authenticating with oAuth..');
+        const body = JSON.stringify({
+            client_id: "ring_official_android",
+            grant_type: "password",
             username: this.username,
             password: this.password,
-            'device[os]': 'ios',
-            'device[hardware_id]': hardware_id,
-            api_version: API_VERSION
-        }, (e, json) => {
-            const token = json && json.profile && json.profile.authentication_token;
-            logger('authentication_token', token);
-            if (!token) {
-                e = new Error('Api failed to return an authentication_token');
-            }
-            //Timeout after authentication to let the token take effect
-            //performance issue..
-            setTimeout(() => {
-                this.token = token;
-                this.authenticating = false;
-                if (this.authQueue.length) {
-                    logger(`Clearing ${this.authQueue.length} callbacks from the queue`);
-                    this.authQueue.forEach(_cb => {return _cb(e, token);});
-                }
-                callback(e, token);
-            }, 1500);
+            scope: "client"
         });
+        const url = parse('https://oauth.ring.com/oauth/token');
+        url.method = 'POST';
+        url.headers = {
+            'content-type': 'application/json',
+            'content-length': body.length
+        };
+        logger('fetching access_token from oAuth token endpoint');
+        const req = https.request(url, (res) => {
+            logger('access_token statusCode', res.statusCode);
+            logger('access_token headers', res.headers);
+            let data = '';
+            res.on('data', d => {return data += d;});
+            res.on('end', () => {
+                let e = null;
+                let json = null;
+                try {
+                    json = JSON.parse(data);
+                } catch (je) {
+                    logger('JSON parse error', data);
+                    logger(je);
+                    e = new Error('JSON parse error from ring, check logging..');
+                }
+                let token = null;
+                if (json && json.access_token) {
+                    token = json.access_token;
+                    logger('authentication_token', token);
+                }
+                if (!token || e) {
+                    logger('access_token request failed, bailing..');
+                    e = e || new Error('Api failed to return an authentication_token');
+                    return callback(e);
+                }
+                const body = JSON.stringify({
+                    device: {
+                        hardware_id: hardware_id,
+                        metadata: {
+                            api_version: "9",
+                        },
+                        os: "android"
+                    }
+                });
+                const u = parse('https://api.ring.com/clients_api/session?api_version=9', true);
+                u.method = 'POST';
+                u.headers = {
+                    Authorization: 'Bearer ' + token,
+                    'content-type': 'application/json',
+                    'content-length': body.length
+                };
+                logger('fetching token with oAuth access_token');
+                const a = https.request(u, (res) => {
+                    logger('token fetch statusCode', res.statusCode);
+                    logger('token fetch headers', res.headers);
+                    let data = '';
+                    let e = null;
+                    res.on('data', d => {return data += d;});
+                    res.on('end', () => {
+                        let json = null;
+                        try {
+                            json = JSON.parse(data);
+                        } catch (je) {
+                            logger('JSON parse error', data);
+                            logger(je);
+                            e = 'JSON parse error from ring, check logging..';
+                        }
+                        logger('token fetch response', json);
+                        const token = json && json.profile && json.profile.authentication_token;
+                        if (!token || e) {
+                            /*istanbul ignore next*/
+                            const msg = e || json && json.error || 'Authentication failed';
+                            return callback(new Error(msg));
+                        }
+                        //Timeout after authentication to let the token take effect
+                        //performance issue..
+                        setTimeout(() => {
+                            this.token = token;
+                            this.authenticating = false;
+                            if (this.authQueue.length) {
+                                logger(`Clearing ${this.authQueue.length} callbacks from the queue`);
+                                this.authQueue.forEach(_cb => {return _cb(e, token);});
+                            }
+                            callback(e, token);
+                        }, 1500);
+                    });
+                });
+                a.write(body);
+                a.end();
+            });
+        });
+        req.write(body);
+        req.end();
     }
 
     devices(callback) {
@@ -255,7 +331,6 @@ class Doorbot {
 
     recording(id, callback) {
         validate_callback(callback);
-        validate_number(id);
         this.simpleRequest(`/dings/${id}/recording`, 'GET', (e, json, res) => {
             callback(e, res && res.headers && res.headers.location, res);
         });

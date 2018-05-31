@@ -3,6 +3,8 @@ const RingAPI = require('../doorbot.js');
 const assert = require('assert');
 const nock = require('nock');
 
+nock.disableNetConnect();
+
 describe('doorbot tests', () => {
     
     beforeEach(() => {
@@ -14,7 +16,11 @@ describe('doorbot tests', () => {
     });
     
     it('authenticate', (done) => {
-        nock('https://api.ring.com').post('/clients_api/session')
+        nock('https://oauth.ring.com').post('/oauth/token')
+            .reply(200, {
+                access_token: 'ACCESS_TOKEN'
+            });
+        nock('https://api.ring.com').post('/clients_api/session?api_version=9')
             .reply(200, {
                 profile: {
                     authentication_token: 'TOKEN'
@@ -31,7 +37,11 @@ describe('doorbot tests', () => {
     });
     
     it('should use auth queue for parallel calls', function(done) {
-        nock('https://api.ring.com').persist().post('/clients_api/session')
+        nock('https://oauth.ring.com').post('/oauth/token')
+            .reply(200, {
+                access_token: 'ACCESS_TOKEN'
+            });
+        nock('https://api.ring.com').persist().post('/clients_api/session?api_version=9')
             .reply(200, {
                 profile: {
                     authentication_token: 'TOKEN'
@@ -63,16 +73,70 @@ describe('doorbot tests', () => {
         }, /password is required/);
     });
     
-    it('authenticate failed', (done) => {
-        nock('https://api.ring.com').post('/clients_api/session')
+    it('authenticate failed - no access_token', (done) => {
+        nock('https://oauth.ring.com').post('/oauth/token')
+            .reply(401, {
+                error: 'You must log in'
+            });
+        const ring = RingAPI({
+            username: 'asdf',
+            password: 'asdf'
+        });
+        ring.devices((e, token) => {
+            assert.equal(token, undefined);
+            assert.equal(e.message, 'Api failed to return an authentication_token');
+            done();
+        });
+    });
+    
+    it('authenticate failed - access_token bad json', (done) => {
+        nock('https://oauth.ring.com').post('/oauth/token')
             .reply(500, '');
         const ring = RingAPI({
             username: 'asdf',
             password: 'asdf'
         });
-        ring.authenticate((e, token) => {
-            assert.equal(token, '');
-            assert.equal(e.message, 'Api failed to return an authentication_token');
+        ring.devices((e, token) => {
+            assert.equal(token, undefined);
+            assert.equal(e.message, 'JSON parse error from ring, check logging..');
+            done();
+        });
+    });
+    
+    it('authenticate failed - token bad json', (done) => {
+        nock('https://oauth.ring.com').post('/oauth/token')
+            .reply(200, {
+                access_token: 'ACCESS_TOKEN'
+            });
+        nock('https://api.ring.com').post('/clients_api/session?api_version=9')
+            .reply(500, '');
+        const ring = RingAPI({
+            username: 'asdf',
+            password: 'asdf'
+        });
+        ring.devices((e, token) => {
+            assert.equal(token, undefined);
+            assert.equal(e.message, 'JSON parse error from ring, check logging..');
+            done();
+        });
+    });
+    
+    it('authenticate failed', (done) => {
+        nock('https://oauth.ring.com').post('/oauth/token')
+            .reply(200, {
+                access_token: 'ACCESS_TOKEN'
+            });
+        nock('https://api.ring.com').post('/clients_api/session?api_version=9')
+            .reply(500, {
+                error: 'Ring.com defined error message'
+            });
+        const ring = RingAPI({
+            username: 'asdf',
+            password: 'asdf'
+        });
+        ring.devices((e, token) => {
+            assert.equal(token, undefined);
+            assert.equal(e.message, 'Ring.com defined error message');
             done();
         });
     });
@@ -259,7 +323,11 @@ describe('doorbot tests', () => {
 
     it('Retry on error..', function(done) {
         this.timeout(100000);
-        nock('https://api.ring.com').persist().post('/clients_api/session')
+        nock('https://oauth.ring.com').persist().post('/oauth/token')
+            .reply(200, {
+                access_token: 'ACCESS_TOKEN'
+            });
+        nock('https://api.ring.com').persist().post('/clients_api/session?api_version=9')
             .reply(200, {
                 profile: {
                     authentication_token: 'TOKEN'
