@@ -2,12 +2,13 @@
 
 /*
  *
- * To use this: npm install async request doorbot
+ * To use this: npm install async mkdirp request doorbot
  *
  */
 
 const RingAPI = require('doorbot');
 const async = require('async');
+const mkdirp = require('mkdirp');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
@@ -21,22 +22,27 @@ const ring = RingAPI({
 const base = path.join(__dirname, 'downloads');
 
 fs.mkdir(base, () => { //ignoring if it exists..
-    ring.history((e, history) => {
-        const fetch = (info, callback) => {
-            ring.recording(info.id, (e, recording) => {
-                const file = path.join(base, '.', url.parse(recording).pathname);
-                console.log('Fetching file', file);
-                const writer = fs.createWriteStream(file);
-                writer.on('close', () => {
-                    console.log('Done writing', file);
-                    callback();
+    ring.devices((e, devices) => { // making it multi devices
+        ring.history((e, history) => {
+            const fetch = (info, callback) => {
+                ring.recording(info.id, (e, recording) => {
+                    const file = path.join(base, '.', url.parse(recording).pathname);
+                    const dirname = path.dirname(file);
+                    mkdirp(dirname, function(err) {
+                        console.log('Fetching file', file);
+                        const writer = fs.createWriteStream(file);
+                        writer.on('close', () => {
+                            console.log('Done writing', file);
+                            callback();
+                        });
+                        request(recording).pipe(writer);
+                    });
                 });
-                request(recording).pipe(writer);
-            });
-        };
+            };
 
-        async.eachLimit(history, 10, fetch, () => {
-            console.log('done');
+            async.eachLimit(history, 10, fetch, () => {
+                console.log('done');
+            });
         });
     });
 });
