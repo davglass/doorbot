@@ -54,7 +54,7 @@ class Doorbot {
         this.retries = options.retries || 0;
         this.counter = 0;
         this.userAgent = options.userAgent || '@nodejs-doorbot';
-        this.token = null;
+        this.token = options.token || null;
 
         if (!this.username) {
             throw(new Error('username is required'));
