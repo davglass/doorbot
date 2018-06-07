@@ -1,6 +1,6 @@
 {
   "name": "doorbot",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "Ring.com Doorbell API",
   "main": "doorbot.js",
   "scripts": {
