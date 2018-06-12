@@ -53,7 +53,7 @@ class Doorbot {
         this.password = options.password;
         this.retries = options.retries || 0;
         this.counter = 0;
-        this.userAgent = options.userAgent || '@nodejs-doorbot';
+        this.userAgent = options.userAgent || 'android:com.ringapp:2.0.67(423)';
         this.token = options.token || null;
 
         if (!this.username) {
