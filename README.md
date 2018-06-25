@@ -57,6 +57,9 @@ Get a list of your devices:
 
 `ring.devices(callback) => (error, array)`
 
+Device Health:
+`ring.health(device, callback) => (error, json)`
+
 Get your ring history:
 
 `ring.history(callback) => (error, array)`

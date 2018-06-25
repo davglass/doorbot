@@ -431,6 +431,25 @@ describe('doorbot tests', () => {
         });
     });
     
+    it('call the health check api', (done) => {
+        nock('https://api.ring.com').get('/clients_api/doorbots/12345/health')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(200, {
+                device_health: {}
+            });
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        const device = { id: '12345' };
+        ring.health(device, (e, json) => {
+            assert.equal(e, null);
+            assert.ok(json.device_health);
+            done();
+        });
+    });
+    
     it('should error on no device object', () => {
         assert.throws(() => {
             const ring = RingAPI({

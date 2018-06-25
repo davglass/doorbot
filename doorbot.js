@@ -365,7 +365,12 @@ class Doorbot {
             time: time
         }, callback);
     }
-
+    
+    health(device, callback) {
+        validate_device(device);
+        validate_callback(callback);
+        this.simpleRequest(`/doorbots/${device.id}/health`, 'GET' , callback);
+    }
 }
 
 module.exports = function(options) {
