@@ -20,7 +20,7 @@ describe('doorbot tests', () => {
             .reply(200, {
                 access_token: 'ACCESS_TOKEN'
             });
-        nock('https://api.ring.com').post('/clients_api/session?api_version=9')
+        nock('https://api.ring.com').post('/clients_api/session?api_version=11')
             .reply(200, {
                 profile: {
                     authentication_token: 'TOKEN'
@@ -28,7 +28,8 @@ describe('doorbot tests', () => {
             });
         const ring = RingAPI({
             email: 'test',
-            password: 'test'
+            password: 'test',
+            api_version: 11
         });
         ring.authenticate((e, token) => {
             assert.equal(token, 'TOKEN');

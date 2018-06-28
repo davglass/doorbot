@@ -18,7 +18,8 @@ const ring = RingAPI({
     email: 'your@email.com',
     password: '12345',
     retries: 10, //authentication retries, optional, defaults to 0
-    userAgent: 'My User Agent' //optional, defaults to @nodejs-doorbot
+    userAgent: 'My User Agent', //optional, defaults to @nodejs-doorbot
+    api_version: 11 //optional in case you need to change it from the default of 9
 });
 
 ring.devices((e, devices) => {

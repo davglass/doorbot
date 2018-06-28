@@ -55,6 +55,7 @@ class Doorbot {
         this.counter = 0;
         this.userAgent = options.userAgent || 'android:com.ringapp:2.0.67(423)';
         this.token = options.token || null;
+        this.api_version = options.api_version || API_VERSION;
 
         if (!this.username) {
             throw(new Error('username is required'));
@@ -139,14 +140,14 @@ class Doorbot {
         }
         /*istanbul ignore next*/
         if (data && !data.api_version) {
-            data.api_version = API_VERSION;
+            data.api_version = this.api_version;
         }
         this.authenticate((e) => {
             if (e && !this.retries) {
                 return callback(e);
             }
             this.fetch(method, url, {
-                api_version: API_VERSION,
+                api_version: this.api_version,
                 auth_token: this.token
             }, data, (e, res, json) => {
                 logger('code', json.statusCode);
@@ -228,12 +229,15 @@ class Doorbot {
                     device: {
                         hardware_id: hardware_id,
                         metadata: {
-                            api_version: "9",
+                            api_version: this.api_version,
                         },
                         os: "android"
                     }
                 });
-                const u = parse('https://api.ring.com/clients_api/session?api_version=9', true);
+                logger('session json', body);
+                const sessionURL = `https://api.ring.com/clients_api/session?api_version=${this.api_version}`;
+                logger('sessionURL', sessionURL);
+                const u = parse(sessionURL, true);
                 u.method = 'POST';
                 u.headers = {
                     Authorization: 'Bearer ' + token,
