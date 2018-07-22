@@ -3,7 +3,7 @@ const parse = require('url').parse;
 const format = require('url').format;
 const stringify = require('querystring').stringify;
 const crypto = require("crypto");
-
+const io = require('socket.io-client');
 const logger = require('debug')('doorbot');
 
 const API_VERSION = 9;
@@ -55,6 +55,9 @@ class Doorbot {
         this.counter = 0;
         this.userAgent = options.userAgent || 'android:com.ringapp:2.0.67(423)';
         this.token = options.token || null;
+        this.oauthToken = options.oauthToken || null;
+        this.alarmSockets = {};
+        this.alarmCallbacks = {};
         this.api_version = options.api_version || API_VERSION;
 
         if (!this.username) {
@@ -69,7 +72,12 @@ class Doorbot {
 
     fetch(method, url, query, body, callback) {
         logger('fetch:', this.counter, method, url);
-        var d = parse('https://api.ring.com/clients_api' + url, true);
+        var d = parse(url, true);
+        if(url.indexOf('http') === -1)
+            d = parse('https://api.ring.com/clients_api' + url, true);
+        else {
+            var altAPI = true;
+        }
         logger('query', query);
         delete d.path;
         delete d.href;
@@ -86,6 +94,8 @@ class Doorbot {
         logger('fetch-data', d);
         d.method = method;
         d.headers = d.headers || {};
+        if(altAPI)
+            d.headers['Authorization'] = "Bearer " + this.oauthToken;
         if (body) {
             body = stringify(body);
             d.headers['content-type'] = 'application/x-www-form-urlencoded';
@@ -208,6 +218,7 @@ class Doorbot {
             res.on('end', () => {
                 let e = null;
                 let json = null;
+                let oauthToken = null;
                 try {
                     json = JSON.parse(data);
                 } catch (je) {
@@ -218,6 +229,7 @@ class Doorbot {
                 let token = null;
                 if (json && json.access_token) {
                     token = json.access_token;
+                    oauthToken = token;
                     logger('authentication_token', token);
                 }
                 if (!token || e) {
@@ -272,6 +284,7 @@ class Doorbot {
                         setTimeout(() => {
                             this.token = token;
                             this.authenticating = false;
+                            this.oauthToken = oauthToken;
                             if (this.authQueue.length) {
                                 logger(`Clearing ${this.authQueue.length} callbacks from the queue`);
                                 this.authQueue.forEach(_cb => {return _cb(e, token);});
@@ -375,6 +388,88 @@ class Doorbot {
         validate_callback(callback);
         this.simpleRequest(`/doorbots/${device.id}/health`, 'GET' , callback);
     }
+
+    initAlarmConnection(device, callback){
+        validate_device(device);
+        validate_callback(callback);
+        if(this.alarmSockets[device.location_id] === undefined) {
+            this.simpleRequest("https://app.ring.com/api/v1/rs/connections", "POST", { accountId: device.location_id }, (e, connection) => {
+                logger('Connecting to Websocket');
+                this.alarmSockets[device.location_id] = io.connect("wss://" + connection.server + "/?authcode=" + connection.authCode, {} );
+                this.alarmSockets[device.location_id].on('connect', callback);
+                this.alarmSockets[device.location_id].on('connect', () => {
+                    this.registerAlarmCallback(device, 'message', (message) => {
+                        logger("Generic Message Received");
+                        if(this.alarmCallbacks[message.msg] !== undefined)
+                            this.alarmCallbacks[message.msg](message);
+                    });
+                });
+            });
+        }
+    }
+
+    registerAlarmCallback(device, messageType, callback){
+        validate_device(device);
+        validate_callback(callback);
+        this.alarmCallbacks[messageType] = callback;
+        if(this.alarmSockets[device.location_id] !== undefined)
+            return this.alarmSockets[device.location_id].on(messageType, callback);
+        else
+            this.initAlarmConnection(device, () => {
+                logger('Connected to websocket');
+                this.registerAlarmCallback(device, messageType, callback);
+            });
+    }
+
+    sendAlarmMessage(device, messageType, messageBody){
+        validate_device(device);
+        if(this.alarmSockets[device.location_id] !== undefined)
+            this.alarmSockets[device.location_id].emit(messageType, messageBody);
+        else
+            this.initAlarmConnection(device, () => {
+                logger('Connected to websocket');
+                this.sendAlarmMessage(device, messageType, messageBody);
+            });
+    }
+
+    getAlarmDevices(alarmDevice, callback){
+        validate_device(alarmDevice);
+        validate_callback(callback);
+        this.alarmCallbacks.DeviceInfoDocGetList = callback;
+        this.sendAlarmMessage(alarmDevice, 'message', { msg: "DeviceInfoDocGetList", seq: 1 });
+    }
+
+    setAlarmMode(alarmDevice, alarmPanelId, alarmMode, bypassedSensors, callback){
+        this.alarmCallbacks.DeviceInfoSet = callback;
+        this.sendAlarmMessage(alarmDevice, 'message', {
+            msg: "DeviceInfoSet",
+            seq: 2,
+            datatype: "DeviceInfoSetType",
+            body: [
+                {
+                    zid: alarmPanelId,
+                    command: {
+                        v1: [
+                            {
+                                commandType: 'security-panel.switch-mode',
+                                data: {
+                                    mode: alarmMode,
+                                    bypass: bypassedSensors
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        });
+    }
+
+    closeAlarmConnection(device){
+        this.alarmSockets[device.location_id].emit('terminate', {});
+        this.alarmSockets[device.location_id].disconnect(true);
+        this.alarmSockets[device.location_id].close();
+    }
+
 }
 
 module.exports = function(options) {
