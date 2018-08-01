@@ -65,6 +65,7 @@ Get your ring history:
 
 `ring.history(callback) => (error, array)`
 `ring.history(limit, callback) => (error, array)` - `limit` - The `Number` of items to return from the history.
+`ring.history(limit, older_than, callback) => (error, array)` - `limit` - The `Number` of items to return from the history. `older_than` - THe ID of the latest history item to start with when going backward.
 
 Get a URL to a recording:
 
