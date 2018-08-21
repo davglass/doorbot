@@ -35,9 +35,9 @@
   "homepage": "https://github.com/davglass/doorbot",
   "devDependencies": {
     "eslint": "^3.12.2",
-    "jenkins-mocha": "^4.1.0",
-    "nock": "^9.0.2",
-    "nyc": "^10.0.0"
+    "jenkins-mocha": "^6.0.0",
+    "nock": "^9.6.1",
+    "nyc": "^13.0.1"
   },
   "dependencies": {
     "debug": "^2.6.8"
