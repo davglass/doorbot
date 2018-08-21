@@ -280,10 +280,12 @@ class Doorbot {
                         }, 1500);
                     });
                 });
+                a.on('error', callback);
                 a.write(body);
                 a.end();
             });
         });
+        req.on('error', callback);
         req.write(body);
         req.end();
     }
