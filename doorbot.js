@@ -150,20 +150,24 @@ class Doorbot {
                 api_version: this.api_version,
                 auth_token: this.token
             }, data, (e, res, json) => {
-                logger('code', json.statusCode);
-                logger('headers', json.headers);
+                if (json) {
+                    logger('code', json.statusCode);
+                    logger('headers', json.headers);
+                }
                 logger(e);
                 if (e && e.code === 401 && this.counter < this.retries) {
                     logger('auth failed, retrying', e);
                     this.counter += 1;
+                    var self = this;
                     setTimeout(() => {
-                        this.token = null;
-                        this.authenticate((e) => {
+                        logger('auth failed, retry', { counter: self.counter });
+                        self.token = null;
+                        self.authenticate(true, (e) => {
                             /*istanbul ignore next*/
                             if (e) {
                                 return callback(e);
                             }
-                            this.simpleRequest(url, method, callback);
+                            self.simpleRequest(url, method, callback);
                         });
                     }, 500);
                     return;
@@ -174,18 +178,24 @@ class Doorbot {
         });
     }
 
-    authenticate(callback) {
-        if (this.token) {
-            logger('auth skipped, we have a token');
-            return callback();
+    authenticate(retryP, callback) {
+        if (typeof retryP === 'function') {
+            callback = retryP;
+            retryP = false;
         }
-        if (this.authenticating) {
-            logger('authenticate in progress, queuing callback');
-            this.authQueue.push(callback);
-            return;
+        if (!retryP) {
+            if (this.token) {
+                logger('auth skipped, we have a token');
+                return callback();
+            }
+            if (this.authenticating) {
+                logger('authenticate in progress, queuing callback');
+                this.authQueue.push(callback);
+                return;
+            }
+            this.authenticating = true;
         }
-        this.authenticating = true;
-        logger('authenticating with oAuth..');
+        logger('authenticating with oAuth...');
         const body = JSON.stringify({
             client_id: "ring_official_android",
             grant_type: "password",
@@ -269,12 +279,14 @@ class Doorbot {
                         }
                         //Timeout after authentication to let the token take effect
                         //performance issue..
+                        var self = this;
                         setTimeout(() => {
-                            this.token = token;
-                            this.authenticating = false;
-                            if (this.authQueue.length) {
-                                logger(`Clearing ${this.authQueue.length} callbacks from the queue`);
-                                this.authQueue.forEach(_cb => {return _cb(e, token);});
+                            self.token = token;
+                            self.authenticating = false;
+                            if (self.authQueue.length) {
+                                logger(`Clearing ${self.authQueue.length} callbacks from the queue`);
+                                self.authQueue.forEach(_cb => {return _cb(e, token);});
+                                self.quthQueue = [];
                             }
                             callback(e, token);
                         }, 1500);
