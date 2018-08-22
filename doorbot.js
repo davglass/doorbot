@@ -150,8 +150,10 @@ class Doorbot {
                 api_version: this.api_version,
                 auth_token: this.token
             }, data, (e, res, json) => {
-                logger('code', json.statusCode);
-                logger('headers', json.headers);
+                if (json) {
+                    logger('code', json.statusCode);
+                    logger('headers', json.headers);
+                }
                 logger(e);
                 if (e && e.code === 401 && this.counter < this.retries) {
                     logger('auth failed, retrying', e);
