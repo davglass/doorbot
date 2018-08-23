@@ -363,7 +363,7 @@ class Doorbot {
                 for (let i = 0; i < dings.length; i++) {
                     const ding = dings[i];
 
-                  if ((ding.doorbot_id === device.id) && (ding.kind === 'on_demand')) return callback(null, ding);
+                    if ((ding.doorbot_id === device.id) && (ding.kind === 'on_demand')) return callback(null, ding);
                 }
 
                 return callback(new Error('VOD not available'));
