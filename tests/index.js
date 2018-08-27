@@ -260,6 +260,30 @@ describe('doorbot tests', () => {
         });
     });
 
+    it('start vod', (done) => {
+        nock('https://api.ring.com').post('/clients_api/doorbots/1/vod')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(200, {
+            });
+        nock('https://api.ring.com').get('/clients_api/dings/active')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(200, [
+              { doorbot_id: 2, kind: 'on_demand' },
+              { doorbot_id: 1, kind: 'on_demand' }
+            ]);
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        ring.vod({ id: 1 }, (e, json) => {
+            assert.ok(json);
+            assert.equal(json.doorbot_id, 1);
+            assert.equal(json.kind, 'on_demand');
+            done();
+        });
+    });
+
     it('get recordings', (done) => {
         const URL = 'http://some.amazon.com/url/to/movie.mp4';
         nock('https://api.ring.com').get('/clients_api/dings/1/recording')
