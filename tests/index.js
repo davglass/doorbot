@@ -284,6 +284,63 @@ describe('doorbot tests', () => {
         });
     });
 
+    it('start vod with error', (done) => {
+        nock('https://api.ring.com').post('/clients_api/doorbots/1/vod')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(200, {
+            });
+        nock('https://api.ring.com').get('/clients_api/dings/active')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(200, []);
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        ring.vod({ id: 1 }, (e) => {
+            assert.ok(e);
+            done();
+        });
+    });
+
+    it('start vod with vod error', (done) => {
+        nock('https://api.ring.com').post('/clients_api/doorbots/1/vod')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(500, {
+                error: new Error('Borked')
+            });
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        ring.vod({ id: 1 }, (e) => {
+            assert.ok(e);
+            done();
+        });
+    });
+    
+    it('start vod with ding error', (done) => {
+        nock('https://api.ring.com').post('/clients_api/doorbots/1/vod')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(200, {
+            });
+        nock('https://api.ring.com').get('/clients_api/dings/active')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .reply(500, {
+                error: new Error('Borked')
+            });
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        ring.vod({ id: 1 }, (e) => {
+            assert.ok(e);
+            done();
+        });
+    });
+
     it('get recordings', (done) => {
         const URL = 'http://some.amazon.com/url/to/movie.mp4';
         nock('https://api.ring.com').get('/clients_api/dings/1/recording')
