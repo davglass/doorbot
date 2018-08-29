@@ -150,6 +150,7 @@ class Doorbot {
                 api_version: this.api_version,
                 auth_token: this.token
             }, data, (e, res, json) => {
+                /*istanbul ignore else - It's only for logging..*/
                 if (json) {
                     logger('code', json.statusCode);
                     logger('headers', json.headers);
