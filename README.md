@@ -71,6 +71,10 @@ Get a URL to a recording:
 
 `ring.recording(id, callback) => (error, url)`
 
+Get information for video on demand:
+
+`ring.vod(device, callback) => (error, json)`
+
 Turn on floodlights
 
 `ring.lightOn(device, callback) => (error)`

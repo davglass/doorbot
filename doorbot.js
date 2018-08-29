@@ -351,6 +351,26 @@ class Doorbot {
         this.simpleRequest(url, 'PUT', callback);
     }
 
+    vod(device, callback) {
+        validate_device(device);
+        validate_callback(callback);
+        this.simpleRequest(`/doorbots/${device.id}/vod`, 'POST' , '', (e, json, res) => {
+            if (e) return callback(e, res);
+
+            this.dings((e, dings) => {
+                if (e) return callback(e);
+
+                for (let i = 0; i < dings.length; i++) {
+                    const ding = dings[i];
+
+                    if ((ding.doorbot_id === device.id) && (ding.kind === 'on_demand')) return callback(null, ding);
+                }
+
+                return callback(new Error('VOD not available'));
+            });
+        });
+    }
+
     recording(id, callback) {
         validate_callback(callback);
         this.simpleRequest(`/dings/${id}/recording`, 'GET', (e, json, res) => {
