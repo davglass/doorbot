@@ -49,29 +49,29 @@ const base = path.join(__dirname, 'downloads');
 
 fs.mkdir(base, () => { //ignoring if it exists..
     const doAgain = (goBack) => {	
-		//Implements the get-next-100-oldest feature
+        //Implements the get-next-100-oldest feature
         if (goBack !== null) {
             olderthan = goBack;
             console.log('Getting more, older than: ' + olderthan);
         }
 	
-		//First value is HistoryLimit, max return is 100 so I hardcoded 1000 to make sure this number is bigger than what the API returns
+        //First value is HistoryLimit, max return is 100 so I hardcoded 1000 to make sure this number is bigger than what the API returns
         ring.history(1000, olderthan, (e, history) => {
             const fetch = (info, callback) => {
                 ring.recording(info.id, (e, recording) => {
-					//Calculate the filename we want this to be saved as
+                    //Calculate the filename we want this to be saved as
                     const datea = dateFormat(info['created_at'],"yyyymmdd_HHMMssZ");
                     const partFilePath = url.parse(recording).pathname.substring(0,url.parse(recording).pathname.length - 4);
                     const parts = partFilePath.split('/');
                     const filePath = '/' + parts[1] + '/' + datea + '_' + parts[2] + '.mp4';
                     const file = path.join(base, '.', filePath);
 					
-					//Is the file we just processed an older File ID than the previous file ID?
+                    //Is the file we just processed an older File ID than the previous file ID?
                     if (parts[2] < oldestFile) {
                         oldestFile = parts[2];
                     }
 	
-					//Make sure the directory exists
+                    //Make sure the directory exists
                     const dirname = path.dirname(file);
                     mkdirp(dirname, () => {
                         //Tracking variable
@@ -105,7 +105,7 @@ fs.mkdir(base, () => { //ignoring if it exists..
             async.eachLimit(history, 10, fetch, () => {
                 console.log('Done, Oldest File: ' + oldestFile);
 				
-				//If we started at the most recent video and don't have an existing oldest, or if we found a new, older Video ID, we start the look again from there - assuming loopForOlder is true
+                //If we started at the most recent video and don't have an existing oldest, or if we found a new, older Video ID, we start the look again from there - assuming loopForOlder is true
                 if ((lastOldest === null || lastOldest !== oldestFile) && loopForOlder) {
                     lastOldest = oldestFile;
                     doAgain(lastOldest); //If we could a new oldest file, start again from there
