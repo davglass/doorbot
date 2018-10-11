@@ -93,7 +93,9 @@ class Doorbot {
         }
         d.headers['user-agent'] = this.userAgent;
         logger('fetch-headers', d.headers);
+        let timeoutP
         const req = https.request(d, (res) => {
+            if (timeoutP) return
             var data = '';
             res.on('data', (d) => {
                 data += d;
@@ -103,6 +105,7 @@ class Doorbot {
                 callback(e);
             });
             res.on('end', () => {
+                req.setTimeout(0)
                 logger('fetch-raw-data', data);
                 var json,
                     e = null;
@@ -126,6 +129,10 @@ class Doorbot {
             });
         });
         req.on('error', callback);
+        req.setTimeout(5 * 60 * 1000, () => {
+            timeoutP = true;
+            callback(new Error('timeout'));
+        })
         if (method === 'POST') {
             logger('fetch-post', body);
             req.write(body);
