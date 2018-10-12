@@ -52,6 +52,7 @@ class Doorbot {
         this.username = options.username || options.email;
         this.password = options.password;
         this.retries = options.retries || 0;
+        this.timeout = options.timeout || (5 * 60 * 1000);
         this.counter = 0;
         this.userAgent = options.userAgent || 'android:com.ringapp:2.0.67(423)';
         this.token = options.token || null;
@@ -93,9 +94,12 @@ class Doorbot {
         }
         d.headers['user-agent'] = this.userAgent;
         logger('fetch-headers', d.headers);
-        let timeoutP
+        let timeoutP;
+        const TIMEOUT = this.timeout;
         const req = https.request(d, (res) => {
-            if (timeoutP) return
+            if (timeoutP) {
+                return;
+            }
             var data = '';
             res.on('data', (d) => {
                 data += d;
@@ -105,7 +109,7 @@ class Doorbot {
                 callback(e);
             });
             res.on('end', () => {
-                req.setTimeout(0)
+                req.setTimeout(0);
                 logger('fetch-raw-data', data);
                 var json,
                     e = null;
@@ -129,10 +133,10 @@ class Doorbot {
             });
         });
         req.on('error', callback);
-        req.setTimeout(5 * 60 * 1000, () => {
+        req.setTimeout(TIMEOUT, () => {
             timeoutP = true;
-            callback(new Error('timeout'));
-        })
+            callback(new Error('An API Timeout Occurred'));
+        });
         if (method === 'POST') {
             logger('fetch-post', body);
             req.write(body);

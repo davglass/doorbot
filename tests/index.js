@@ -552,6 +552,27 @@ describe('doorbot tests', () => {
         });
     });
     
+    it('should error on a timeout', (done) => {
+        nock('https://api.ring.com').get('/clients_api/doorbots/12345/health')
+            .query({ auth_token: 'TOKEN', api_version: 9 })
+            .delay(2000)
+            .reply(200, {
+                device_health: {}
+            });
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test',
+            timeout: 100
+        });
+        ring.token = 'TOKEN';
+        const device = { id: '12345' };
+        ring.health(device, (e) => {
+            assert.ok(e);
+            assert.equal(e.message, 'An API Timeout Occurred');
+            done();
+        });
+    });
+    
     it('should error on no device object', () => {
         assert.throws(() => {
             const ring = RingAPI({
