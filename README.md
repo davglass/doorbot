@@ -19,7 +19,8 @@ const ring = RingAPI({
     password: '12345',
     retries: 10, //authentication retries, optional, defaults to 0
     userAgent: 'My User Agent', //optional, defaults to @android:com.ringapp:2.0.67(423)
-    api_version: 11 //optional in case you need to change it from the default of 9
+    api_version: 11, //optional in case you need to change it from the default of 9
+    timeout: (10 * 60 * 1000) //Defaults to 5 minutes
 });
 
 ring.devices((e, devices) => {
