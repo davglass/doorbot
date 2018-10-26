@@ -13,6 +13,7 @@ describe('doorbot tests', () => {
 
     it('should export stuff', () => {
         assert.ok(RingAPI);
+        assert.ok(RingAPI.Doorbot);
     });
     
     it('authenticate', (done) => {
@@ -26,7 +27,7 @@ describe('doorbot tests', () => {
                     authentication_token: 'TOKEN'
                 }
             });
-        const ring = RingAPI({
+        const ring = new RingAPI.Doorbot({
             email: 'test',
             password: 'test',
             api_version: 11
@@ -552,6 +553,25 @@ describe('doorbot tests', () => {
         });
     });
     
+    it('work for alarm API', (done) => {
+        nock('https://app.ring.com').get('/api/v1/rs/connections')
+            .matchHeader('Authorization', 'Bearer OAUTH_TOKEN')
+            .reply(200, {
+                foo: {}
+            });
+        const ring = RingAPI({
+            username: 'test',
+            password: 'test'
+        });
+        ring.token = 'TOKEN';
+        ring.oauthToken = 'OAUTH_TOKEN';
+        ring.fetch('GET', 'https://app.ring.com/api/v1/rs/connections', {}, null, (e, json) => {
+            assert.equal(e, null);
+            assert.ok(json.foo);
+            done();
+        });
+    });
+    
     it('should error on a timeout', (done) => {
         nock('https://api.ring.com').get('/clients_api/doorbots/12345/health')
             .query({ auth_token: 'TOKEN', api_version: 9 })
@@ -613,4 +633,5 @@ describe('doorbot tests', () => {
             ring.set_doorbot_dnd({ id: 1234 }, null, () => {});
         }, /Number argument required/);
     });
+
 });

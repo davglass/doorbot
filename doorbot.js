@@ -56,6 +56,7 @@ class Doorbot {
         this.counter = 0;
         this.userAgent = options.userAgent || 'android:com.ringapp:2.0.67(423)';
         this.token = options.token || null;
+        this.oauthToken = options.oauthToken || null;
         this.api_version = options.api_version || API_VERSION;
 
         if (!this.username) {
@@ -70,7 +71,13 @@ class Doorbot {
 
     fetch(method, url, query, body, callback) {
         logger('fetch:', this.counter, method, url);
-        var d = parse('https://api.ring.com/clients_api' + url, true);
+        let useAuthToken = false;
+        let base = 'https://api.ring.com/clients_api' + url;
+        if (url.indexOf('http') > -1) {
+            base = url;
+            useAuthToken = true;
+        }
+        var d = parse(base, true);
         logger('query', query);
         delete d.path;
         delete d.href;
@@ -87,6 +94,9 @@ class Doorbot {
         logger('fetch-data', d);
         d.method = method;
         d.headers = d.headers || {};
+        if (useAuthToken) {
+            d.headers['Authorization'] = "Bearer " + this.oauthToken;
+        }
         if (body) {
             body = stringify(body);
             d.headers['content-type'] = 'application/x-www-form-urlencoded';
@@ -230,6 +240,8 @@ class Doorbot {
             res.on('end', () => {
                 let e = null;
                 let json = null;
+                let oauthToken = null;
+                let token = null;
                 try {
                     json = JSON.parse(data);
                 } catch (je) {
@@ -237,9 +249,9 @@ class Doorbot {
                     logger(je);
                     e = new Error('JSON parse error from ring, check logging..');
                 }
-                let token = null;
                 if (json && json.access_token) {
                     token = json.access_token;
+                    oauthToken = token;
                     logger('authentication_token', token);
                 }
                 if (!token || e) {
@@ -294,6 +306,7 @@ class Doorbot {
                         var self = this;
                         setTimeout(() => {
                             self.token = token;
+                            self.oauthToken = oauthToken;
                             self.authenticating = false;
                             if (self.authQueue.length) {
                                 logger(`Clearing ${self.authQueue.length} callbacks from the queue`);
@@ -430,3 +443,5 @@ class Doorbot {
 module.exports = function(options) {
     return new Doorbot(options);
 };
+
+module.exports.Doorbot = Doorbot;
