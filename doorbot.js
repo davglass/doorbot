@@ -100,9 +100,13 @@ class Doorbot {
             if (timeoutP) {
                 return;
             }
-            var data = '';
+            var data = null;
             res.on('data', (d) => {
-                data += d;
+                if(data === null) {
+                    data = d;
+                } else {
+                    data = Buffer.concat([data, d]);
+                }
             });
             /*istanbul ignore next*/
             res.on('error', (e) => {
@@ -111,25 +115,24 @@ class Doorbot {
             res.on('end', () => {
                 req.setTimeout(0);
                 logger('fetch-raw-data', data);
-                var json,
+                var body,
                     e = null;
                 try {
-                    data = scrub(data);
-                    json = JSON.parse(data, formatDates);
+                    body = JSON.parse(scrub(data.toString()), formatDates);
                 } catch (e) {
-                    json = data;
+                    body = data;
                 }
-                logger('fetch-json', json);
-                if (json.error) {
-                    e = json;
+                logger('fetch-body', body);
+                if (body && body.error) {
+                    e = body;
                     e.status = Number(e.status);
-                    json = {};
+                    body = {};
                 }
                 if (res.statusCode >= 400) {
                     e = new Error(`API returned Status Code ${res.statusCode}`);
                     e.code = res.statusCode;
                 }
-                callback(e, json, res);
+                callback(e, body, res);
             });
         });
         req.on('error', callback);
@@ -361,6 +364,20 @@ class Doorbot {
             url = `/doorbots/${device.id}/floodlight_light_on`;
         }
         this.simpleRequest(url, 'PUT', callback);
+    }
+
+    snapshotTimestamps(device, callback) {
+        validate_device(device);
+        validate_callback(callback);
+        this.simpleRequest('/snapshots/timestamps', 'POST', {
+            doorbot_ids: [device.id]
+        }, callback);
+    }
+
+    snapshot(device, callback) {
+        validate_device(device);
+        validate_callback(callback);
+        this.simpleRequest(`/snapshots/image/${device.id}`, 'GET', callback);
     }
 
     vod(device, callback) {
