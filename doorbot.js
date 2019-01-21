@@ -366,6 +366,20 @@ class Doorbot {
         this.simpleRequest(url, 'PUT', callback);
     }
 
+    snapshotTimestamps(device, callback) {
+        validate_device(device);
+        validate_callback(callback);
+        this.simpleRequest('/snapshots/timestamps', 'POST', {
+            doorbot_ids: [device.id]
+        }, callback);
+    }
+
+    snapshot(device, callback) {
+        validate_device(device);
+        validate_callback(callback);
+        this.simpleRequest(`/snapshots/image/${device.id}`, 'GET', callback);
+    }
+
     vod(device, callback) {
         validate_device(device);
         validate_callback(callback);
