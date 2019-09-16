@@ -61,7 +61,9 @@ fs.mkdir(base, () => { //ignoring if it exists..
                 ring.recording(info.id, (e, recording) => {
                     //Calculate the filename we want this to be saved as
                     const datea = dateFormat(info['created_at'],"yyyymmdd_HHMMssZ");
-                    const partFilePath = url.parse(recording).pathname.substring(0,url.parse(recording).pathname.length - 4);
+		 // Constructed path ended in _stamp.mp4 which broke the file ID. Changed offset from -4 to -10 to remove string chars.
+		 // const partFilePath = url.parse(recording).pathname.substring(0,url.parse(recording).pathname.length - 4);
+                    const partFilePath = url.parse(recording).pathname.substring(0,url.parse(recording).pathname.length - 10);
                     const parts = partFilePath.split('/');
                     const filePath = '/' + parts[1] + '/' + datea + '_' + parts[2] + '.mp4';
                     const file = path.join(base, '.', filePath);
