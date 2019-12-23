@@ -5,9 +5,14 @@ const stringify = require('querystring').stringify;
 const crypto = require("crypto");
 const io = require('socket.io-client');
 const logger = require('debug')('doorbot');
+const fs = require('fs');
 
-const API_VERSION = 9;
-const hardware_id = crypto.randomBytes(16).toString("hex");
+const API_VERSION = 11;
+let hardware_id = crypto.randomBytes(16).toString("hex");
+
+const homeDir = require('os').homedir();
+const path = require('path');
+const cacheFile = ".ringAlarmCache";
 
 const formatDates = (key, value) => {
     if (value && value.indexOf && value.indexOf('.000Z') > -1) {
@@ -51,14 +56,16 @@ class Doorbot {
         options = options || {};
         this.username = options.username || options.email;
         this.password = options.password;
-        this.retries = options.retries || 0;
+        this.retries = options.retries || 10;
         this.counter = 0;
-        this.userAgent = options.userAgent || 'android:com.ringapp:2.0.67(423)';
+        this.userAgent = options.userAgent || 'Dalvik/2.1.0 (Linux; U; Android 8.1.0; LG-RS988 Build/OPM6.171019.030.H1)';
         this.token = options.token || null;
         this.oauthToken = options.oauthToken || null;
         this.alarmSockets = {};
         this.alarmCallbacks = {};
         this.api_version = options.api_version || API_VERSION;
+        this.cacheDir = options.cacheDir || homeDir;
+
 
         if (!this.username) {
             throw(new Error('username is required'));
@@ -66,6 +73,11 @@ class Doorbot {
         if (!this.password) {
             throw(new Error('password is required'));
         }
+
+	this.loadingCache = false;
+        this.cacheQueue = [];
+        this.loadCache(this.cacheDir);
+
         this.authenticating = false;
         this.authQueue = [];
     }
@@ -75,9 +87,7 @@ class Doorbot {
         var d = parse(url, true);
         if(url.indexOf('http') === -1)
             d = parse('https://api.ring.com/clients_api' + url, true);
-        else {
-            var altAPI = true;
-        }
+
         logger('query', query);
         delete d.path;
         delete d.href;
@@ -94,8 +104,7 @@ class Doorbot {
         logger('fetch-data', d);
         d.method = method;
         d.headers = d.headers || {};
-        if(altAPI)
-            d.headers['Authorization'] = "Bearer " + this.oauthToken;
+        d.headers['Authorization'] = "Bearer " + this.oauthToken;
         if (body) {
             body = stringify(body);
             d.headers['content-type'] = 'application/x-www-form-urlencoded';
@@ -143,66 +152,63 @@ class Doorbot {
         req.end();
     }
 
-    simpleRequest(url, method, data, callback) {
-        if (typeof data === 'function') {
-            callback = data;
-            data = null;
-        }
-        /*istanbul ignore next*/
-        if (data && !data.api_version) {
-            data.api_version = this.api_version;
-        }
-        this.authenticate((e) => {
-            if (e && !this.retries) {
-                return callback(e);
+    loadCache(cacheDir){
+        this.loadingCache = true;
+        fs.readFile(path.join(cacheDir,cacheFile), 'utf8', (err, data) => {
+            this.loadingCache = false;
+            if(!err) {
+                let jsonData = JSON.parse(data);
+                hardware_id = jsonData.hardware_id;
+                this.oauthToken = jsonData.oauthToken;
+                this.refreshToken = jsonData.refreshToken;
+                logger("found cached data: " + stringify(jsonData));
             }
-            this.fetch(method, url, {
-                api_version: this.api_version,
-                auth_token: this.token
-            }, data, (e, res, json) => {
-                logger('code', json.statusCode);
-                logger('headers', json.headers);
-                logger(e);
-                if (e && e.code === 401 && this.counter < this.retries) {
-                    logger('auth failed, retrying', e);
-                    this.counter += 1;
-                    setTimeout(() => {
-                        this.token = null;
-                        this.authenticate((e) => {
-                            /*istanbul ignore next*/
-                            if (e) {
-                                return callback(e);
-                            }
-                            this.simpleRequest(url, method, callback);
-                        });
-                    }, 500);
-                    return;
-                }
-                this.counter = 0;
-                callback(e, res, json);
-            });
+            else
+                logger('error loading cached data' + err);
+            if (this.cacheQueue.length) {
+                logger(`Clearing ${this.cacheQueue.length} callbacks from the cache queue`);
+                this.cacheQueue.forEach(_cb => {
+                    return _cb();
+                });
+                this.cacheQueue = [];
+            }
         });
     }
 
-    authenticate(callback) {
-        if (this.token) {
-            logger('auth skipped, we have a token');
-            return callback();
-        }
-        if (this.authenticating) {
-            logger('authenticate in progress, queuing callback');
-            this.authQueue.push(callback);
-            return;
-        }
-        this.authenticating = true;
-        logger('authenticating with oAuth..');
-        const body = JSON.stringify({
-            client_id: "ring_official_android",
-            grant_type: "password",
-            username: this.username,
-            password: this.password,
-            scope: "client"
+    writeCache(){
+        let outObj = {
+            oauthToken: this.oauthToken,
+            refreshToken: this.refreshToken,
+            hardware_id: hardware_id
+        };
+        let outStr = JSON.stringify(outObj);
+        fs.writeFile(path.join(this.cacheDir, cacheFile), outStr, 'utf8', (err) => {
+            if(err) logger('failed to persist token data' + err);
+            else logger('successfully saved token data');
         });
+    }
+
+
+
+    loginOauth(callback, type){
+        logger('authenticating with oAuth...');
+        let body;
+        if(type === "login")
+            body = JSON.stringify({
+                client_id: "ring_official_android",
+                grant_type: "password",
+                username: this.username,
+                password: this.password,
+                scope: "client"
+            });
+        else if(type === "refresh")
+            body = JSON.stringify({
+                client_id: "ring_official_android",
+                grant_type: "refresh_token",
+                refresh_token: this.refreshToken,
+                scope: "client"
+            });
+
         const url = parse('https://oauth.ring.com/oauth/token');
         url.method = 'POST';
         url.headers = {
@@ -218,87 +224,137 @@ class Doorbot {
             res.on('end', () => {
                 let e = null;
                 let json = null;
-                let oauthToken = null;
                 try {
                     json = JSON.parse(data);
                 } catch (je) {
                     logger('JSON parse error', data);
-                    logger(je);
+		    logger(je);
                     e = new Error('JSON parse error from ring, check logging..');
                 }
                 let token = null;
-                if (json && json.access_token) {
+                if (json && json.access_token && json.refresh_token) {
                     token = json.access_token;
-                    oauthToken = token;
+                    this.oauthToken = token;
+                    this.refreshToken = json.refresh_token;
                     logger('authentication_token', token);
+                    this.writeCache();
                 }
                 if (!token || e) {
                     logger('access_token request failed, bailing..');
-                    e = e || new Error('Api failed to return an authentication_token');
+                    e = e || new Error('API failed to return an authentication_token');
                     return callback(e);
                 }
-                const body = JSON.stringify({
-                    device: {
-                        hardware_id: hardware_id,
-                        metadata: {
-                            api_version: this.api_version,
-                        },
-                        os: "android"
-                    }
-                });
-                logger('session json', body);
-                const sessionURL = `https://api.ring.com/clients_api/session?api_version=${this.api_version}`;
-                logger('sessionURL', sessionURL);
-                const u = parse(sessionURL, true);
-                u.method = 'POST';
-                u.headers = {
-                    Authorization: 'Bearer ' + token,
-                    'content-type': 'application/json',
-                    'content-length': body.length
-                };
-                logger('fetching token with oAuth access_token');
-                const a = https.request(u, (res) => {
-                    logger('token fetch statusCode', res.statusCode);
-                    logger('token fetch headers', res.headers);
-                    let data = '';
-                    let e = null;
-                    res.on('data', d => {return data += d;});
-                    res.on('end', () => {
-                        let json = null;
-                        try {
-                            json = JSON.parse(data);
-                        } catch (je) {
-                            logger('JSON parse error', data);
-                            logger(je);
-                            e = 'JSON parse error from ring, check logging..';
-                        }
-                        logger('token fetch response', json);
-                        const token = json && json.profile && json.profile.authentication_token;
-                        if (!token || e) {
-                            /*istanbul ignore next*/
-                            const msg = e || json && json.error || 'Authentication failed';
-                            return callback(new Error(msg));
-                        }
-                        //Timeout after authentication to let the token take effect
-                        //performance issue..
-                        setTimeout(() => {
-                            this.token = token;
-                            this.authenticating = false;
-                            this.oauthToken = oauthToken;
-                            if (this.authQueue.length) {
-                                logger(`Clearing ${this.authQueue.length} callbacks from the queue`);
-                                this.authQueue.forEach(_cb => {return _cb(e, token);});
-                            }
-                            callback(e, token);
-                        }, 1500);
-                    });
-                });
-                a.write(body);
-                a.end();
+                return callback(null, token);
             });
         });
+        req.on('error', callback);
         req.write(body);
         req.end();
+
+    }
+
+
+
+    getOauthToken(callback){
+	if(this.refreshToken){
+            logger('found refresh token, attempting to refresh');
+            this.loginOauth((e, token) => {
+               if(e) {
+                   logger("oAuth refresh failed, attempting login");
+                   return this.loginOauth(callback, "login");
+               }
+               logger("successfully refreshed oAuth token");
+               return callback(e, token);
+            }, "refresh");
+        }
+        else{
+            return this.loginOauth(callback, "login");
+        }
+    }
+
+    simpleRequest(url, method, data, callback) {
+        if (typeof data === 'function') {
+            callback = data;
+            data = null;
+        }
+        /*istanbul ignore next*/
+        if (data && !data.api_version) {
+            data.api_version = this.api_version;
+        }
+        this.authenticate((e) => {
+            if (e && !this.retries) {
+                return callback(e);
+            }
+            this.fetch(method, url, {
+                api_version: this.api_version
+            }, data, (e, res, json) => {
+                /*istanbul ignore else - It's only for logging..*/
+                if (json) {
+                    logger('code', json.statusCode);
+                    logger('headers', json.headers);
+                }
+                logger('error', e);
+                if (e && e.code === 401 && this.counter < this.retries) {
+                    logger('auth failed, retrying', e);
+                    this.counter += 1;
+                    let self = this;
+                    setTimeout(() => {
+                        logger('auth failed, retry', { counter: self.counter });
+                        self.token = self.oauthToken = null;
+                        self.authenticate(true, (e) => {
+                            /*istanbul ignore next*/
+                            if (e) {
+                                return callback(e);
+                            }
+                            self.simpleRequest(url, method, callback);
+                        });
+                    }, 500);
+                    return;
+                }
+                this.counter = 0;
+                callback(e, res, json);
+            });
+        });
+    }
+
+    authenticate(retryP, callback) {
+	if (typeof retryP === 'function') {
+            callback = retryP;
+            retryP = false;
+        }
+        if(this.loadingCache){
+            logger("Cache read in progress. Queuing auth");
+            this.cacheQueue.push(() => {
+                this.authenticate(retryP, callback);
+            });
+            return;
+        }
+        if (!retryP) {
+            if (this.oauthToken) {
+                logger('auth skipped, we have a token');
+                return callback();
+            }
+            if (this.authenticating) {
+                logger('authenticate in progress, queuing callback');
+                this.authQueue.push(callback);
+                return;
+            }
+            this.authenticating = true;
+        }
+        let self = this;
+        this.getOauthToken((err, token) => {
+            if(err)  return callback(err);
+            self.authenticating = false;
+            if (self.authQueue.length) {
+		logger(`Clearing ${self.authQueue.length} callbacks from the queue`);
+                self.authQueue.forEach(_cb => {
+                    return _cb(err, token);
+                });
+                self.authQueue = [];
+            }
+            return callback(null, token);
+        })
+
     }
 
     devices(callback) {
@@ -345,6 +401,21 @@ class Doorbot {
         }
         this.simpleRequest(url, 'PUT', callback);
     }
+
+    subscribe(device, callback) {
+        validate_device(device);
+        validate_callback(callback);
+        var url = `/doorbots/${device.id}/subscribe`;
+        this.simpleRequest(url, 'POST',{}, callback);
+    }
+
+    subscribe_motion(device, callback){
+        validate_device(device);
+        validate_callback(callback);
+        var url = `/doorbots/${device.id}/motions_subscribe`;
+        this.simpleRequest(url, 'POST', {}, callback);
+    }
+
 
     recording(id, callback) {
         validate_callback(callback);
