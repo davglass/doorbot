@@ -362,14 +362,18 @@ class Doorbot {
         this.simpleRequest('/ring_devices', 'GET', callback);
     }
 
-    history(limit, callback) {
+    history(limit, older_than, callback) {
+        if (typeof older_than === 'function') {
+            callback = older_than;
+            older_than = null;
+        }
         if (typeof limit === 'function') {
             callback = limit;
             limit = 20;
         }
         validate_number(limit);
         validate_callback(callback);
-        const url = `/doorbots/history?limit=${limit}`;
+        const url = `/doorbots/history?limit=${limit}` + ((older_than) ? `&older_than=${older_than}` : '');
         this.simpleRequest(url, 'GET', callback);
     }
 
